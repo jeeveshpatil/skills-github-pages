@@ -739,6 +739,51 @@ returns void language sql security definer set search_path = public as $$
   update players set last_seen_at = now() where room_id = p_room and user_id = auth.uid();
 $$;
 
+
+-- rematch: host clones the room (settings + password) and announces it to everyone in the old one
+create or replace function public.rematch(p_room uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare r rooms := require_host(p_room); rid uuid; nm text;
+begin
+  if r.status <> 'ended' then raise exception 'Match is not over'; end if;
+  insert into rooms (code, host_id, name, mode, is_public, max_players, head_start_s, duration_s, reveal_interval_s,
+    location_interval_s, reveal_blur_m, tag_radius_m, zone_lat, zone_lng, zone_start_m, zone_end_m, zone_steps,
+    zone_grace_s, max_speed_mps, safe_zones, rules, map_id, tournament_id)
+  select gen_room_code(), r.host_id, r.name, r.mode, r.is_public, r.max_players, r.head_start_s, r.duration_s,
+    r.reveal_interval_s, r.location_interval_s, r.reveal_blur_m, r.tag_radius_m, r.zone_lat, r.zone_lng,
+    r.zone_start_m, r.zone_end_m, r.zone_steps, r.zone_grace_s, r.max_speed_mps, r.safe_zones, r.rules, r.map_id,
+    case when exists (select 1 from tournaments t where t.id = r.tournament_id and t.status = 'open') then r.tournament_id end
+  returning id into rid;
+  insert into room_secrets (room_id, password_hash) select rid, password_hash from room_secrets where room_id = p_room;
+  select display_name into nm from players where room_id = p_room and user_id = r.host_id;
+  insert into players (room_id, user_id, display_name, team)
+  select rid, r.host_id, coalesce(nm, 'Host'), case when team = 'spectator' then 'spectator' end
+  from players where room_id = p_room and user_id = r.host_id;
+  perform log_event(p_room, 'rematch', r.host_id, null, jsonb_build_object('code', (select code from rooms where id = rid)));
+  return rid;
+end $$;
+
+-- rematch joins skip the password for players of the previous match
+create or replace function public.join_rematch(p_old_room uuid, p_code text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare uid uuid := require_uid(); rid uuid; nm text;
+begin
+  if not exists (select 1 from events e where e.room_id = p_old_room and e.type = 'rematch' and e.payload->>'code' = upper(p_code))
+     or not exists (select 1 from players where room_id = p_old_room and user_id = uid) then
+    raise exception 'Not eligible for this rematch';
+  end if;
+  select id into rid from rooms where code = upper(p_code) and status = 'lobby';
+  if rid is null then raise exception 'Rematch lobby closed'; end if;
+  if exists (select 1 from players where room_id = rid and user_id = uid) then return rid; end if;
+  if (select count(*) from players where room_id = rid and team is distinct from 'spectator') >= (select max_players from rooms where id = rid) then
+    raise exception 'Room is full';
+  end if;
+  select display_name into nm from players where room_id = p_old_room and user_id = uid;
+  insert into players (room_id, user_id, display_name) values (rid, uid, nm);
+  perform log_event(rid, 'player_joined', uid);
+  return rid;
+end $$;
+
 -- ---------------------------------------------------------------- tournaments
 create or replace function public.create_tournament(p_name text)
 returns uuid language plpgsql security definer set search_path = public as $$
@@ -809,7 +854,7 @@ grant execute on function
   public.emergency_stop(uuid, text), public.resume_match(uuid), public.tag_player(uuid, uuid),
   public.respond_capture(bigint, boolean), public.resolve_capture(bigint, boolean), public.tick(uuid),
   public.update_location(uuid, double precision, double precision, double precision, double precision, double precision),
-  public.heartbeat(uuid), public.create_tournament(text), public.close_tournament(uuid),
+  public.heartbeat(uuid), public.rematch(uuid), public.join_rematch(uuid, text), public.create_tournament(text), public.close_tournament(uuid),
   public.tournament_standings(uuid), public.tournament_matches(uuid), public.delete_my_location_data(),
   public.is_member(uuid), public.my_team(uuid), public.is_referee(uuid), public.geo_dist(float8, float8, float8, float8)
 to authenticated;

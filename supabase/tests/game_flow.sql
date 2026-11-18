@@ -165,3 +165,16 @@ end $$;
 select set_config('request.jwt.claim.sub', :X, false); set role authenticated;
 do $$ begin assert (select count(*) from list_public_rooms()) = 0; end $$;
 reset role;
+
+-- rematch from the infection room
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+insert into t_ctx select 'new', rematch((select v::uuid from t_ctx where k='room'))::text;
+reset role;
+select set_config('request.jwt.claim.sub', :S1, false); set role authenticated;
+select join_rematch((select v::uuid from t_ctx where k='room'), (select payload->>'code' from events where type='rematch'));
+do $$ begin assert (select count(*) from players where room_id = (select v::uuid from t_ctx where k='new')) = 2; end $$;
+reset role;
+select set_config('request.jwt.claim.sub', :X, false); set role authenticated;
+do $$ begin perform join_rematch((select v::uuid from t_ctx where k='room'), 'AAAAAA'); raise exception 'should fail';
+exception when others then assert sqlerrm like 'Not eligible%', sqlerrm; end $$;
+reset role;
