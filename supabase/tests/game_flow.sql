@@ -178,3 +178,31 @@ select set_config('request.jwt.claim.sub', :X, false); set role authenticated;
 do $$ begin perform join_rematch((select v::uuid from t_ctx where k='room'), 'AAAAAA'); raise exception 'should fail';
 exception when others then assert sqlerrm like 'Not eligible%', sqlerrm; end $$;
 reset role;
+
+-- referee: non-playing host sees live positions; a playing host does not
+\set R '''55555555-5555-5555-5555-555555555555'''
+insert into auth.users (id) values (:R);
+update profiles set location_consent_at = now() where id = :R;
+select set_config('request.jwt.claim.sub', :R, false); set role authenticated;
+update t_ctx set v = create_room('{"mode":"classic","host_spectates":true,"head_start_s":0,"zone_lat":51.5,"zone_lng":-0.1}'::jsonb)::text where k = 'room';
+update t_ctx set v = (select code from rooms where id = (select v::uuid from t_ctx where k='room')) where k = 'code';
+reset role;
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+select join_room((select v from t_ctx where k='code'));
+reset role;
+select set_config('request.jwt.claim.sub', :S1, false); set role authenticated;
+select join_room((select v from t_ctx where k='code'));
+reset role;
+select set_config('request.jwt.claim.sub', :R, false); set role authenticated;
+select start_match((select v::uuid from t_ctx where k='room'));
+reset role;
+insert into positions (room_id, user_id, lat, lng) values
+  ((select v::uuid from t_ctx where k='room'), :H, 51.5, -0.1), ((select v::uuid from t_ctx where k='room'), :S1, 51.501, -0.1);
+select set_config('request.jwt.claim.sub', :R, false); set role authenticated;
+do $$ begin assert (select count(*) from positions where room_id = (select v::uuid from t_ctx where k='room')) = 2, 'referee sees all'; end $$;
+-- host transfer to a player does not move referee rights
+select transfer_host((select v::uuid from t_ctx where k='room'), :H);
+reset role;
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+do $$ begin assert (select count(*) from positions where room_id = (select v::uuid from t_ctx where k='room')) = 1, 'new host must not gain referee view'; end $$;
+reset role;

@@ -77,14 +77,16 @@ export function useRoom(roomId: string | undefined) {
         });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reveals', filter: f }, (p) => {
-        setState((s) => ({ ...s, reveals: [...s.reveals.slice(-199), p.new as Reveal] }));
+        const n = p.new as Reveal;
+        setState((s) => (s.reveals.some((x) => x.id === n.id) ? s : { ...s, reveals: [...s.reveals.slice(-199), n] }));
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'captures', filter: f }, (p) => {
         const n = p.new as Capture;
         setState((s) => ({ ...s, captures: s.captures.some((c) => c.id === n.id) ? s.captures.map((c) => (c.id === n.id ? n : c)) : [...s.captures, n] }));
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events', filter: f }, (p) => {
-        setState((s) => ({ ...s, events: [...s.events.slice(-79), p.new as GameEvent] }));
+        const n = p.new as GameEvent;
+        setState((s) => (s.events.some((x) => x.id === n.id) ? s : { ...s, events: [...s.events.slice(-79), n] }));
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {

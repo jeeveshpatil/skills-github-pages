@@ -25,7 +25,7 @@ export interface Room {
   reveal_interval_s: number; location_interval_s: number; reveal_blur_m: number; tag_radius_m: number;
   zone_lat: number | null; zone_lng: number | null; zone_start_m: number; zone_end_m: number;
   zone_steps: number; zone_grace_s: number; max_speed_mps: number; safe_zones: SafeZone[]; rules: Rules;
-  map_id: string | null; tournament_id: string | null; initial_prey: number;
+  map_id: string | null; tournament_id: string | null; initial_prey: number; referee_id: string | null;
   started_at: string | null; headstart_ends_at: string | null; ends_at: string | null;
   paused_at: string | null; paused_by: string | null; ended_at: string | null; last_reveal_at: string | null;
   winner: string | null; winner_player: string | null; created_at: string;

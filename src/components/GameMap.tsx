@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+
+// MapLibre resolves its worker relative to its own module URL, which bundling breaks; point it at the emitted asset.
+maplibregl.setWorkerUrl(workerUrl);
 import { circlePolygon } from '../lib/geo';
 import type { SafeZone } from '../lib/types';
 
@@ -23,18 +27,20 @@ interface Props {
   fitKey?: string | number;
   className?: string;
   interactive?: boolean;
+  controls?: boolean;
 }
 
 const TILE = (import.meta.env.VITE_TILE_URL as string | undefined) || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 function worldWithHole(lat: number, lng: number, r: number): GeoJSON.Feature {
-  const ring = circlePolygon(lat, lng, r).geometry.coordinates[0].slice().reverse();
+  // hole must wind opposite to the outer ring or MapLibre treats it as a separate polygon
+  const ring = circlePolygon(lat, lng, r).geometry.coordinates[0];
   return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]], ring] } };
 }
 
 /** Tactical full-bleed map: MapLibre GL + OSM raster tiles with a dark/neon treatment. */
-export function GameMap({ center, zone, safeZones = [], markers = [], circles = [], tracks = [], onClick, follow, fitKey, className = '', interactive = true }: Props) {
+export function GameMap({ center, zone, safeZones = [], markers = [], circles = [], tracks = [], onClick, follow, fitKey, className = '', interactive = true, controls = true }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
   const htmlMarkers = useRef(new Map<string, maplibregl.Marker>());
@@ -59,7 +65,7 @@ export function GameMap({ center, zone, safeZones = [], markers = [], circles = 
       attributionControl: { compact: true },
       interactive,
     });
-    m.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: false }), 'bottom-right');
+    if (controls) m.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: false }), 'bottom-right');
     m.on('load', () => {
       const add = (id: string) => m.addSource(id, { type: 'geojson', data: empty });
       ['outside', 'zone', 'next', 'safe', 'circles', 'tracks'].forEach(add);
@@ -134,17 +140,20 @@ export function GameMap({ center, zone, safeZones = [], markers = [], circles = 
     if (zone) {
       const b = circlePolygon(zone.lat, zone.lng, zone.radius * 1.1).geometry.coordinates[0];
       const bounds = b.reduce((acc, c) => acc.extend(c as [number, number]), new maplibregl.LngLatBounds(b[0] as [number, number], b[0] as [number, number]));
-      map.current.fitBounds(bounds, { padding: 40, duration: 600 });
+      map.current.fitBounds(bounds, { padding: 40, duration: 0 });
     } else if (center) {
       map.current.jumpTo({ center: [center[1], center[0]], zoom: 15 });
     }
   }, [ready, fitKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (ready && follow) map.current?.easeTo({ center: [follow[1], follow[0]], duration: 500 });
+    if (!ready || !follow || !map.current) return;
+    // follow-cam keeps a street-level zoom so nearby players don't collapse into one point
+    map.current.easeTo({ center: [follow[1], follow[0]], zoom: Math.max(map.current.getZoom(), 16), duration: 500 });
   }, [ready, follow?.[0], follow?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={el} className={`absolute inset-0 ${className}`} />;
+  // inline position: maplibre-gl.css (unlayered) sets .maplibregl-map{position:relative}, which beats Tailwind layers
+  return <div ref={el} className={className} style={{ position: "absolute", inset: 0 }} />;
 }
 
 function esc(s: string) { return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`); }

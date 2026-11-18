@@ -374,6 +374,7 @@ begin
     headstart_ends_at = now() + make_interval(secs => head_start_s),
     ends_at = now() + make_interval(secs => head_start_s + duration_s),
     last_reveal_at = null,
+    referee_id = case when (select team from players p where p.room_id = p_room and p.user_id = r.host_id) = 'spectator' then r.host_id end,
     initial_prey = (select count(*) from players p where p.room_id = p_room and is_prey(r.mode, p.team))
   where id = p_room;
   perform log_event(p_room, 'match_started', r.host_id, null, jsonb_build_object('mode', r.mode));

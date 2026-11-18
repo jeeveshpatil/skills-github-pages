@@ -135,7 +135,7 @@ export default function Game({ room: r, players, positions, reveals, captures, e
 
   return (
     <div className="fixed inset-0 bg-ink overflow-hidden select-none">
-      <GameMap zone={zone} safeZones={room.safe_zones} markers={markers} circles={circles} fitKey={room.id}
+      <GameMap controls={false} zone={zone} safeZones={room.safe_zones} markers={markers} circles={circles} fitKey={room.id}
         follow={follow && myPos && !spectator ? [myPos.lat, myPos.lng] : null} />
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 55%, #05080acc 100%)' }} />
 

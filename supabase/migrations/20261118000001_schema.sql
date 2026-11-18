@@ -66,6 +66,7 @@ create table public.rooms (
   map_id uuid references public.maps(id) on delete set null,
   tournament_id uuid references public.tournaments(id) on delete set null,
   initial_prey integer not null default 0,
+  referee_id uuid,  -- non-playing host pinned at match start (sees live positions)
   started_at timestamptz,
   headstart_ends_at timestamptz,
   ends_at timestamptz,
@@ -214,9 +215,9 @@ $$;
 
 create or replace function public.is_referee(p_room uuid)
 returns boolean language sql stable security definer set search_path = public as $$
+  -- pinned at start_match, so transferring host mid-match cannot hand live positions to anyone
   select exists (
-    select 1 from rooms r join players p on p.room_id = r.id and p.user_id = r.host_id
-    where r.id = p_room and r.host_id = auth.uid() and p.team = 'spectator'
+    select 1 from rooms r where r.id = p_room and r.referee_id = auth.uid()
       and coalesce((r.rules->>'referee_live')::boolean, true)
   );
 $$;
