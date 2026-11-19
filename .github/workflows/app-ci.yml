@@ -1,0 +1,27 @@
+name: App CI
+on:
+  push:
+    branches-ignore: [my-pages]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Engine tests on the runner's preinstalled Postgres
+        run: |
+          # ubuntu runners ship PostgreSQL; install the distro default only if it's missing
+          ls -d /usr/lib/postgresql/*/bin >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y -qq postgresql >/dev/null)
+          bash supabase/tests/run.sh
