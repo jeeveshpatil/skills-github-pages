@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-const ICE: RTCIceServer[] = ((import.meta.env.VITE_ICE_SERVERS as string | undefined) || 'stun:stun.l.google.com:19302')
-  .split(',').map((u) => ({ urls: u.trim() })).filter((s) => s.urls);
+// VITE_ICE_SERVERS_JSON (full RTCIceServer[] incl. TURN username/credential) takes precedence over the
+// simple comma-separated VITE_ICE_SERVERS url list.
+function iceServers(): RTCIceServer[] {
+  const json = import.meta.env.VITE_ICE_SERVERS_JSON as string | undefined;
+  if (json) {
+    try { const v = JSON.parse(json); if (Array.isArray(v) && v.length) return v as RTCIceServer[]; }
+    catch { console.warn('VITE_ICE_SERVERS_JSON is not valid JSON; falling back to VITE_ICE_SERVERS'); }
+  }
+  return ((import.meta.env.VITE_ICE_SERVERS as string | undefined) || 'stun:stun.l.google.com:19302')
+    .split(',').map((u) => u.trim()).filter(Boolean).map((urls) => ({ urls }));
+}
+const ICE = iceServers();
 
 type Signal = { from: string; to?: string; kind: 'hello' | 'offer' | 'answer' | 'ice' | 'bye'; data?: unknown };
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { MODES, modeInfo } from '../lib/modes';
 import { formatDistance } from '../lib/geo';
-import type { GameMap as GameMapT, Mode, Room, Rules, SafeZone, Tournament } from '../lib/types';
+import type { GameMap as GameMapT, LatLng, Mode, Room, Rules, SafeZone, Tournament } from '../lib/types';
 import { useAuth } from '../hooks/useAuth';
 import { GameMap } from './GameMap';
 import { Button, Field, Panel, Slider, Toggle, inputCls } from './ui';
@@ -12,15 +12,15 @@ export interface Settings {
   head_start_s: number; duration_s: number; reveal_interval_s: number; location_interval_s: number;
   reveal_blur_m: number; tag_radius_m: number; zone_lat: number | null; zone_lng: number | null;
   zone_start_m: number; zone_end_m: number; zone_steps: number; zone_grace_s: number; max_speed_mps: number;
-  safe_zones: SafeZone[]; rules: Rules; map_id: string | null; tournament_id: string | null; host_spectates: boolean;
+  safe_zones: SafeZone[]; boundary: LatLng[] | null; rules: Rules; map_id: string | null; tournament_id: string | null; host_spectates: boolean;
 }
 
 export const defaultSettings = (): Settings => ({
   name: 'Night Op', mode: 'classic', is_public: false, password: '', max_players: 12,
   head_start_s: 120, duration_s: 1800, reveal_interval_s: 180, location_interval_s: 5,
   reveal_blur_m: 60, tag_radius_m: 15, zone_lat: null, zone_lng: null, zone_start_m: 800, zone_end_m: 300,
-  zone_steps: 3, zone_grace_s: 60, max_speed_mps: 12, safe_zones: [], map_id: null, tournament_id: null, host_spectates: false,
-  rules: { capture_confirm: true, zone_elimination: false, reveal_hunters: false, proximity_alerts: true, disconnect_elim_s: 300, self_team_pick: true, spectators_allowed: true, flag_threshold: 3, referee_live: true, record_replay: true, voice_enabled: true },
+  zone_steps: 3, zone_grace_s: 60, max_speed_mps: 12, safe_zones: [], boundary: null, map_id: null, tournament_id: null, host_spectates: false,
+  rules: { capture_confirm: true, zone_elimination: false, reveal_hunters: false, proximity_alerts: true, disconnect_elim_s: 300, self_team_pick: true, spectators_allowed: true, flag_threshold: 3, referee_live: true, record_replay: true, voice_enabled: true, zone_moves: false },
 });
 
 export function settingsFromRoom(r: Room): Settings {
@@ -36,7 +36,7 @@ export function SettingsForm({ initial, onSubmit, submitLabel, busy, lobby }: {
 }) {
   const { session } = useAuth();
   const [s, setS] = useState<Settings>(initial);
-  const [pickMode, setPickMode] = useState<'center' | 'safe'>('center');
+  const [pickMode, setPickMode] = useState<'center' | 'safe' | 'boundary'>('center');
   const [maps, setMaps] = useState<GameMapT[]>([]);
   const [tours, setTours] = useState<Tournament[]>([]);
   const [fit, setFit] = useState(0);
@@ -61,12 +61,13 @@ export function SettingsForm({ initial, onSubmit, submitLabel, busy, lobby }: {
   const applyMap = (id: string) => {
     const m = maps.find((x) => x.id === id);
     if (!m) return set('map_id', null);
-    setS((x) => ({ ...x, map_id: m.id, zone_lat: m.center_lat, zone_lng: m.center_lng, zone_start_m: m.radius_m, zone_end_m: Math.min(x.zone_end_m, m.radius_m), safe_zones: m.safe_zones }));
+    setS((x) => ({ ...x, map_id: m.id, zone_lat: m.center_lat, zone_lng: m.center_lng, zone_start_m: m.radius_m, zone_end_m: Math.min(x.zone_end_m, m.radius_m), safe_zones: m.safe_zones, boundary: m.boundary }));
     setFit((f) => f + 1);
   };
 
   const onMapClick = (lat: number, lng: number) => {
     if (pickMode === 'center') setS((x) => ({ ...x, zone_lat: lat, zone_lng: lng }));
+    else if (pickMode === 'boundary') setS((x) => ({ ...x, boundary: [...(x.boundary ?? []), { lat, lng }].slice(0, 50) }));
     else if (s.safe_zones.length < 10) set('safe_zones', [...s.safe_zones, { name: `Safe ${s.safe_zones.length + 1}`, lat, lng, r: 25 }]);
   };
 
@@ -90,9 +91,9 @@ export function SettingsForm({ initial, onSubmit, submitLabel, busy, lobby }: {
       <div className="grid lg:grid-cols-[1.25fr_1fr] gap-4">
         <Panel title="02 · Arena" right={
           <div className="flex gap-1">
-            {(['center', 'safe'] as const).map((k) => (
+            {(['center', 'safe', 'boundary'] as const).map((k) => (
               <button type="button" key={k} onClick={() => setPickMode(k)} className={`font-mono text-[10px] px-2 py-1 border ${pickMode === k ? 'border-cyan text-cyan' : 'border-line text-mute'}`}>
-                {k === 'center' ? 'TAP: CENTRE' : 'TAP: SAFE ZONE'}
+                {k === 'center' ? 'CENTRE' : k === 'safe' ? 'SAFE ZONE' : 'BOUNDARY'}
               </button>
             ))}
           </div>
@@ -102,10 +103,12 @@ export function SettingsForm({ initial, onSubmit, submitLabel, busy, lobby }: {
               center={hasZone ? [s.zone_lat!, s.zone_lng!] : null}
               zone={hasZone ? { lat: s.zone_lat!, lng: s.zone_lng!, radius: s.zone_start_m, next: s.zone_end_m } : null}
               safeZones={s.safe_zones}
+              boundary={s.boundary}
               markers={hasZone ? [{ id: 'c', lat: s.zone_lat!, lng: s.zone_lng!, color: '#2dffa0', kind: 'pin' }] : []}
               onClick={onMapClick}
               fitKey={fit}
             />
+            {pickMode === 'boundary' && <div className="absolute inset-x-0 top-3 text-center pointer-events-none"><span className="font-mono text-[10px] bg-ink/90 px-2 py-1 text-amber">Tap to add boundary corners (min 3)</span></div>}
             {!hasZone && <div className="absolute inset-x-0 bottom-3 text-center pointer-events-none"><span className="font-mono text-xs bg-ink/90 px-3 py-1.5 text-cyan">Tap the map or use your location to place the zone</span></div>}
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
@@ -117,11 +120,13 @@ export function SettingsForm({ initial, onSubmit, submitLabel, busy, lobby }: {
               </select>
             )}
             {s.safe_zones.length > 0 && <Button type="button" size="sm" variant="subtle" onClick={() => set('safe_zones', [])}>Clear {s.safe_zones.length} safe zones</Button>}
+            {(s.boundary?.length ?? 0) > 0 && <Button type="button" size="sm" variant="subtle" onClick={() => set('boundary', null)}>Clear boundary ({s.boundary!.length} pts)</Button>}
           </div>
           <div className="grid sm:grid-cols-2 gap-4 mt-4">
             <Slider label="Start radius" value={s.zone_start_m} min={100} max={5000} step={50} onChange={(v) => setS((x) => ({ ...x, zone_start_m: v, zone_end_m: Math.min(x.zone_end_m, v) }))} format={formatDistance} />
             <Slider label="Final radius" value={s.zone_end_m} min={20} max={s.zone_start_m} step={10} onChange={(v) => set('zone_end_m', v)} format={formatDistance} />
             <Slider label="Shrink steps" value={s.zone_steps} min={0} max={10} onChange={(v) => set('zone_steps', v)} format={(v) => (v === 0 ? 'Continuous' : `${v} steps`)} />
+            <div className="sm:col-span-2 -my-2"><Toggle label="Moving zone" desc="The circle drifts to a random final position as it shrinks" checked={!!s.rules.zone_moves} onChange={(v) => rule('zone_moves', v)} /></div>
             <Slider label="Out-of-zone grace" value={s.zone_grace_s} min={0} max={300} step={15} onChange={(v) => set('zone_grace_s', v)} format={mins} />
           </div>
         </Panel>

@@ -28,19 +28,62 @@ returns boolean language sql immutable as $$ select coalesce((r.rules->>k)::bool
 create or replace function public.rule_int(r public.rooms, k text, d integer)
 returns integer language sql immutable as $$ select coalesce((r.rules->>k)::integer, d); $$;
 
--- Zone radius at time t. Mirrored in src/lib/geo.ts (zoneRadiusAt) — keep in sync.
-create or replace function public.zone_radius(r public.rooms, t timestamptz)
+-- Zone shrink progress 0..1 at time t (stepped when zone_steps > 0).
+-- Mirrored in src/lib/geo.ts (zoneProgressAt / zoneRadiusAt / zoneCenterAt) — keep in sync.
+create or replace function public.zone_progress(r public.rooms, t timestamptz)
 returns double precision language plpgsql immutable as $$
 declare p double precision; total double precision;
 begin
-  if r.headstart_ends_at is null or r.ends_at is null then return r.zone_start_m; end if;
+  if r.headstart_ends_at is null or r.ends_at is null then return 0; end if;
   if r.status = 'paused' and r.paused_at is not null then t := r.paused_at; end if;
   total := extract(epoch from r.ends_at - r.headstart_ends_at);
-  if total <= 0 then return r.zone_end_m; end if;
+  if total <= 0 then return 1; end if;
   p := greatest(0, least(1, extract(epoch from t - r.headstart_ends_at) / total));
   if r.zone_steps > 0 then p := floor(p * r.zone_steps) / r.zone_steps; end if;
-  return r.zone_start_m - (r.zone_start_m - r.zone_end_m) * p;
+  return p;
 end $$;
+
+create or replace function public.zone_radius(r public.rooms, t timestamptz)
+returns double precision language sql immutable as $$
+  select r.zone_start_m - (r.zone_start_m - r.zone_end_m) * zone_progress(r, t);
+$$;
+
+-- Moving zone: centre slides from the start centre to zone_end_* as it shrinks.
+create or replace function public.zone_center_lat(r public.rooms, t timestamptz)
+returns double precision language sql immutable as $$
+  select r.zone_lat + (coalesce(r.zone_end_lat, r.zone_lat) - r.zone_lat) * zone_progress(r, t);
+$$;
+create or replace function public.zone_center_lng(r public.rooms, t timestamptz)
+returns double precision language sql immutable as $$
+  select r.zone_lng + (coalesce(r.zone_end_lng, r.zone_lng) - r.zone_lng) * zone_progress(r, t);
+$$;
+
+-- Ray-casting point-in-polygon for the optional play-area boundary ([{lat,lng},...], >= 3 points).
+create or replace function public.in_polygon(poly jsonb, lat double precision, lng double precision)
+returns boolean language plpgsql immutable as $$
+declare n int; i int; j int; xi float8; yi float8; xj float8; yj float8; inside boolean := false;
+begin
+  if poly is null or jsonb_typeof(poly) <> 'array' then return true; end if;
+  n := jsonb_array_length(poly);
+  if n < 3 then return true; end if;
+  j := n - 1;
+  for i in 0..n - 1 loop
+    xi := (poly->i->>'lng')::float8; yi := (poly->i->>'lat')::float8;
+    xj := (poly->j->>'lng')::float8; yj := (poly->j->>'lat')::float8;
+    if ((yi > lat) <> (yj > lat)) and (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) then
+      inside := not inside;
+    end if;
+    j := i;
+  end loop;
+  return inside;
+end $$;
+
+-- Outside the playable area = outside the (moving, shrinking) zone or outside the boundary polygon.
+create or replace function public.outside_area(r public.rooms, lat double precision, lng double precision, t timestamptz)
+returns boolean language sql immutable as $$
+  select (r.zone_lat is not null and geo_dist(lat, lng, zone_center_lat(r, t), zone_center_lng(r, t)) > zone_radius(r, t))
+      or not in_polygon(r.boundary, lat, lng);
+$$;
 
 create or replace function public.in_safe_zone(r public.rooms, lat double precision, lng double precision)
 returns boolean language sql immutable as $$
@@ -129,6 +172,11 @@ begin
               'r', least(200, greatest(5, (z->>'r')::float8)))), '[]'::jsonb)
             from (select z from jsonb_array_elements(s->'safe_zones') z limit 10) q)
       else safe_zones end,
+    boundary = case when not (s ? 'boundary') then boundary
+      when jsonb_typeof(s->'boundary') = 'array' and jsonb_array_length(s->'boundary') >= 3 then
+        (select jsonb_agg(jsonb_build_object('lat', clampf(z->>'lat', -90, 90), 'lng', clampf(z->>'lng', -180, 180)))
+         from (select z from jsonb_array_elements(s->'boundary') z limit 50) q)
+      else null end,
     rules = case when jsonb_typeof(s->'rules') = 'object' then rules || (s->'rules') else rules end,
     map_id = case when s ? 'map_id' then (s->>'map_id')::uuid else map_id end,
     tournament_id = case when s ? 'tournament_id' then (s->>'tournament_id')::uuid else tournament_id end
@@ -364,6 +412,18 @@ begin
     select * into hp from positions where room_id = p_room and user_id = r.host_id;
     if not found then raise exception 'Set a zone centre (or share your location) before starting'; end if;
     update rooms set zone_lat = hp.lat, zone_lng = hp.lng where id = p_room;
+  end if;
+  -- moving zone: pick a final centre so the final circle stays inside the starting one
+  select * into r from rooms where id = p_room;
+  if rule_bool(r, 'zone_moves', false) and r.zone_start_m > r.zone_end_m then
+    declare ang float8 := random() * 2 * pi(); d float8 := (r.zone_start_m - r.zone_end_m) * 0.85 * sqrt(random());
+    begin
+      update rooms set zone_end_lat = zone_lat + (d * cos(ang)) / 111320.0,
+        zone_end_lng = zone_lng + (d * sin(ang)) / (111320.0 * greatest(0.01, cos(radians(zone_lat))))
+      where id = p_room;
+    end;
+  else
+    update rooms set zone_end_lat = null, zone_end_lng = null where id = p_room;
   end if;
   delete from players where room_id = p_room and status = 'left';
   update players set status = 'alive', captures = 0, score = 0, distance_m = 0, flags = 0,
@@ -613,8 +673,8 @@ begin
     for rec in select p.user_id, p.out_of_zone_since, p.last_seen_at, pos.lat, pos.lng
                from players p left join positions pos on pos.room_id = p.room_id and pos.user_id = p.user_id
                where p.room_id = p_room and p.status = 'alive' and is_prey(r.mode, p.team) loop
-      if rec.lat is not null and r.zone_lat is not null then
-        if geo_dist(rec.lat, rec.lng, r.zone_lat, r.zone_lng) > rad then
+      if rec.lat is not null and (r.zone_lat is not null or r.boundary is not null) then
+        if outside_area(r, rec.lat, rec.lng, now()) then
           if rec.out_of_zone_since is null then
             update players set out_of_zone_since = now() where room_id = p_room and user_id = rec.user_id;
             perform log_event(p_room, 'zone_warning', rec.user_id);
@@ -716,9 +776,11 @@ begin
   res := jsonb_build_object('status', r.status, 'suspect', suspicious);
   if r.zone_lat is not null then
     rad := zone_radius(r, now());
-    zd := geo_dist(p_lat, p_lng, r.zone_lat, r.zone_lng);
-    res := res || jsonb_build_object('zone_radius', rad, 'zone_dist', zd, 'outside', zd > rad,
-      'in_safe_zone', in_safe_zone(r, p_lat, p_lng));
+    zd := geo_dist(p_lat, p_lng, zone_center_lat(r, now()), zone_center_lng(r, now()));
+    res := res || jsonb_build_object('zone_radius', rad, 'zone_dist', zd, 'outside', outside_area(r, p_lat, p_lng, now()),
+      'out_of_bounds', not in_polygon(r.boundary, p_lat, p_lng), 'in_safe_zone', in_safe_zone(r, p_lat, p_lng));
+  elsif r.boundary is not null then
+    res := res || jsonb_build_object('outside', not in_polygon(r.boundary, p_lat, p_lng), 'out_of_bounds', not in_polygon(r.boundary, p_lat, p_lng));
   end if;
 
   -- proximity: only a coarse band, never coordinates or bearing
@@ -749,10 +811,10 @@ begin
   if r.status <> 'ended' then raise exception 'Match is not over'; end if;
   insert into rooms (code, host_id, name, mode, is_public, max_players, head_start_s, duration_s, reveal_interval_s,
     location_interval_s, reveal_blur_m, tag_radius_m, zone_lat, zone_lng, zone_start_m, zone_end_m, zone_steps,
-    zone_grace_s, max_speed_mps, safe_zones, rules, map_id, tournament_id)
+    zone_grace_s, max_speed_mps, safe_zones, boundary, rules, map_id, tournament_id)
   select gen_room_code(), r.host_id, r.name, r.mode, r.is_public, r.max_players, r.head_start_s, r.duration_s,
     r.reveal_interval_s, r.location_interval_s, r.reveal_blur_m, r.tag_radius_m, r.zone_lat, r.zone_lng,
-    r.zone_start_m, r.zone_end_m, r.zone_steps, r.zone_grace_s, r.max_speed_mps, r.safe_zones, r.rules, r.map_id,
+    r.zone_start_m, r.zone_end_m, r.zone_steps, r.zone_grace_s, r.max_speed_mps, r.safe_zones, r.boundary, r.rules, r.map_id,
     case when exists (select 1 from tournaments t where t.id = r.tournament_id and t.status = 'open') then r.tournament_id end
   returning id into rid;
   insert into room_secrets (room_id, password_hash) select rid, password_hash from room_secrets where room_id = p_room;

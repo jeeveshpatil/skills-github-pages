@@ -6,7 +6,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 // MapLibre resolves its worker relative to its own module URL, which bundling breaks; point it at the emitted asset.
 maplibregl.setWorkerUrl(workerUrl);
 import { circlePolygon } from '../lib/geo';
-import type { SafeZone } from '../lib/types';
+import type { LatLng, SafeZone } from '../lib/types';
 
 export interface MapMarker {
   id: string; lat: number; lng: number; color: string; label?: string;
@@ -17,7 +17,8 @@ export interface MapTrack { id: string; color: string; coords: [number, number][
 
 interface Props {
   center?: [number, number] | null;
-  zone?: { lat: number; lng: number; radius: number; next?: number | null } | null;
+  zone?: { lat: number; lng: number; radius: number; next?: number | null; nextLat?: number; nextLng?: number } | null;
+  boundary?: LatLng[] | null;
   safeZones?: SafeZone[];
   markers?: MapMarker[];
   circles?: MapCircle[];
@@ -40,7 +41,7 @@ function worldWithHole(lat: number, lng: number, r: number): GeoJSON.Feature {
 }
 
 /** Tactical full-bleed map: MapLibre GL + OSM raster tiles with a dark/neon treatment. */
-export function GameMap({ center, zone, safeZones = [], markers = [], circles = [], tracks = [], onClick, follow, fitKey, className = '', interactive = true, controls = true }: Props) {
+export function GameMap({ center, zone, boundary, safeZones = [], markers = [], circles = [], tracks = [], onClick, follow, fitKey, className = '', interactive = true, controls = true }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
   const htmlMarkers = useRef(new Map<string, maplibregl.Marker>());
@@ -68,11 +69,13 @@ export function GameMap({ center, zone, safeZones = [], markers = [], circles = 
     if (controls) m.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: false }), 'bottom-right');
     m.on('load', () => {
       const add = (id: string) => m.addSource(id, { type: 'geojson', data: empty });
-      ['outside', 'zone', 'next', 'safe', 'circles', 'tracks'].forEach(add);
+      ['outside', 'zone', 'next', 'safe', 'circles', 'tracks', 'boundary'].forEach(add);
       m.addLayer({ id: 'outside', type: 'fill', source: 'outside', paint: { 'fill-color': '#ff2a4a', 'fill-opacity': 0.13 } });
       m.addLayer({ id: 'zone-line', type: 'line', source: 'zone', paint: { 'line-color': '#2dffa0', 'line-width': 2.5, 'line-blur': 0.5 } });
       m.addLayer({ id: 'zone-glow', type: 'line', source: 'zone', paint: { 'line-color': '#2dffa0', 'line-width': 12, 'line-opacity': 0.12, 'line-blur': 6 } });
       m.addLayer({ id: 'next-line', type: 'line', source: 'next', paint: { 'line-color': '#22e3ff', 'line-width': 1.5, 'line-dasharray': [3, 3] } });
+      m.addLayer({ id: 'boundary-line', type: 'line', source: 'boundary', paint: { 'line-color': '#ffb020', 'line-width': 2, 'line-dasharray': [2, 2] } });
+      m.addLayer({ id: 'boundary-pts', type: 'circle', source: 'boundary', filter: ['==', '$type', 'Point'], paint: { 'circle-radius': 4, 'circle-color': '#ffb020' } });
       m.addLayer({ id: 'safe-fill', type: 'fill', source: 'safe', paint: { 'fill-color': '#22e3ff', 'fill-opacity': 0.12 } });
       m.addLayer({ id: 'safe-line', type: 'line', source: 'safe', paint: { 'line-color': '#22e3ff', 'line-width': 1.5 } });
       m.addLayer({ id: 'circles-fill', type: 'fill', source: 'circles', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'opacity'] } });
@@ -95,9 +98,19 @@ export function GameMap({ center, zone, safeZones = [], markers = [], circles = 
     if (zone) {
       set('zone', circlePolygon(zone.lat, zone.lng, zone.radius));
       set('outside', worldWithHole(zone.lat, zone.lng, zone.radius));
-      set('next', zone.next && zone.next < zone.radius ? circlePolygon(zone.lat, zone.lng, zone.next) : empty);
+      set('next', zone.next && zone.next < zone.radius ? circlePolygon(zone.nextLat ?? zone.lat, zone.nextLng ?? zone.lng, zone.next) : empty);
     } else { set('zone', empty); set('outside', empty); set('next', empty); }
-  }, [ready, zone?.lat, zone?.lng, zone?.radius, zone?.next]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, zone?.lat, zone?.lng, zone?.radius, zone?.next, zone?.nextLat, zone?.nextLng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!ready) return;
+    const pts = boundary ?? [];
+    const ring = pts.map((p) => [p.lng, p.lat] as [number, number]);
+    set('boundary', { type: 'FeatureCollection', features: [
+      ...(ring.length >= 2 ? [{ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: ring.length >= 3 ? [...ring, ring[0]] : ring } }] : []),
+      ...ring.map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })),
+    ] });
+  }, [ready, JSON.stringify(boundary)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!ready) return;

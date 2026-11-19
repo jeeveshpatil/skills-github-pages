@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Shell } from '../components/Shell';
-import { Button, Field, Panel, errMsg, inputCls, useToast } from '../components/ui';
+import { Button, Field, Panel, Toggle, errMsg, inputCls, useToast } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
+import { currentSubscription, disablePush, enablePush, pushSupported } from '../lib/push';
 import { ACHIEVEMENTS, RANKS, rankFor } from '../lib/ranks';
 import { formatClock, formatDistance } from '../lib/geo';
 import { modeInfo } from '../lib/modes';
@@ -21,6 +22,12 @@ export default function Profile() {
   const [ach, setAch] = useState<{ code: string; unlocked_at: string }[]>([]);
   const [hist, setHist] = useState<Row[]>([]);
   const [name, setName] = useState(me!.username);
+  const [push, setPush] = useState<boolean | null>(null);
+  useEffect(() => { if (own) currentSubscription().then((s) => setPush(!!s)).catch(() => setPush(false)); }, [own]);
+  const togglePush = async (on: boolean) => {
+    try { if (on) await enablePush(); else await disablePush(); setPush(on); toast(on ? 'Match alerts enabled on this device' : 'Match alerts disabled', 'success'); }
+    catch (e) { toast(errMsg(e), 'error'); }
+  };
   const uid = own ? me!.id : id!;
 
   useEffect(() => {
@@ -100,6 +107,9 @@ export default function Profile() {
           </Panel>
           <Panel title="Privacy">
             <p className="text-sm">Live positions are deleted when a match ends. Replay tracks are kept for 48 hours, visible only to that match's players.</p>
+            {pushSupported() ? (
+              <div className="mt-3 border-t border-line pt-2"><Toggle label="Match alerts (push)" desc="Reveals, hunt start, tags, SOS — even when the app is in the background" checked={!!push} onChange={togglePush} /></div>
+            ) : <p className="text-xs text-mute mt-3">Push alerts unavailable here (not configured, or on iOS install the app to the home screen first).</p>}
             <Button variant="ghost" className="mt-3" onClick={() => api.deleteMyLocationData().then(() => toast('Location history deleted', 'success')).catch((e) => toast(errMsg(e), 'error'))}>Delete my location history now</Button>
           </Panel>
         </div>

@@ -73,7 +73,7 @@ export default function Results({ room: r, players, events, uid }: RoomProps) {
   const sorted = [...results].sort((a, b) => Number(b.won) - Number(a.won) || b.xp - a.xp);
   const maxDist = Math.max(1, ...results.map((x) => x.distance_m));
   const timeline = events.filter((e) => ['capture_confirmed', 'infected', 'zone_eliminated', 'disconnect_eliminated', 'hunt_started', 'emergency_stop', 'match_ended'].includes(e.type));
-  const zone = room.zone_lat != null && room.zone_lng != null ? { lat: room.zone_lat, lng: room.zone_lng, radius: room.zone_start_m, next: room.zone_end_m } : null;
+  const zone = room.zone_lat != null && room.zone_lng != null ? { lat: room.zone_lat, lng: room.zone_lng, radius: room.zone_start_m, next: room.zone_end_m, nextLat: room.zone_end_lat ?? undefined, nextLng: room.zone_end_lng ?? undefined } : null;
   const dur = room.ended_at && room.headstart_ends_at ? Date.parse(room.ended_at) - Date.parse(room.headstart_ends_at) : 0;
 
   const rematch = async () => {
@@ -109,7 +109,7 @@ export default function Results({ room: r, players, events, uid }: RoomProps) {
         <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
           <Panel title="Replay" right={<span className="font-mono text-[10px] text-mute">{history.length} track points</span>}>
             <div className="relative h-80 sm:h-[420px] chamfer-sm overflow-hidden border border-line">
-              <GameMap zone={zone} safeZones={room.safe_zones} tracks={tracks} markers={markers} fitKey={room.id} center={zone ? [zone.lat, zone.lng] : null} />
+              <GameMap zone={zone} boundary={room.boundary} safeZones={room.safe_zones} tracks={tracks} markers={markers} fitKey={room.id} center={zone ? [zone.lat, zone.lng] : null} />
               {history.length === 0 && <div className="absolute inset-0 grid place-items-center pointer-events-none"><span className="font-mono text-xs bg-ink/90 px-3 py-1.5 text-mute">No replay data (disabled or already purged)</span></div>}
             </div>
             {history.length > 0 && (

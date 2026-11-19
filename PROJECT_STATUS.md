@@ -5,6 +5,8 @@
 - Client: auth (guest/magic link), home, matchmaking, create/settings, join, lobby, in-game HUD, results/replay, host dashboard, profile, leaderboard, tournaments, arena maps, consent gate, voice
 - Tests: unit (vitest), DB engine (`supabase/tests`), multi-client E2E (`scripts/e2e.mjs`); UI flows verified in headless Chromium against local Supabase
 - CI workflow (`app-ci.yml`), manual Pages deploy workflow
+- Moving zone (`rules.zone_moves`, end centre picked server-side at start), polygon play-area boundary (rooms/maps `boundary`, `in_polygon`/`outside_area` in SQL, `inPolygon` in TS)
+- Web Push: `push_subscriptions` + `events` trigger → pg_net → `supabase/functions/push` (verified locally end to end); PNG icons; TURN via `VITE_ICE_SERVERS_JSON`
 
 ## Key decisions
 - Reference site (shadowhunt.fun) was unreachable from the build sandbox; features derived from the brief and the genre. No code/assets copied.
@@ -14,7 +16,6 @@
 - MapLibre worker URL set explicitly (`GameMap.tsx`); map element positioned inline because maplibre CSS overrides Tailwind layers.
 
 ## Pending / ideas
-- Push notifications for reveals when app is backgrounded (browsers throttle background GPS; players should keep the app open)
-- TURN server for voice behind strict NATs (`VITE_ICE_SERVERS`)
-- Polygon (non-circular) boundaries; moving zone centre
-- PNG icons for older iOS home-screen support
+- Native wrappers (Capacitor) for true background GPS — browsers throttle location when backgrounded
+- Self-hosted TURN deployment guide; short-lived TURN credentials minted server-side
+- Notification preferences per event type

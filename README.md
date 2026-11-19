@@ -10,12 +10,14 @@ server-generated, blurred location pings while a shrinking zone forces Shadows t
 - Room codes, passwords, public matchmaking / quick match, spectators, rematch
 - Host lobby (teams, kick, transfer host, live settings), desktop **host dashboard** (roster, disputes, anomalies, live stats, pause/abort)
 - Configurable head start, duration, reveal interval & blur, GPS interval, tag radius, player cap
-- Stepped or continuous **shrinking zone**, out-of-zone grace/elimination, custom **arena maps** with safe zones
+- Stepped or continuous **shrinking zone** that can also **move** to a random final position, out-of-zone grace/elimination
+- Custom **arena maps**: polygon play-area **boundaries** (out of bounds = outside the zone) and safe zones
 - Live map + tactical compass, proximity bands (never coordinates), haptics, screen wake lock
 - Tag → target confirm/dispute → host ruling; automatic win detection per mode
 - XP, 8 ranks, 13 achievements, profiles, match history, global leaderboard, **tournaments** with standings
 - **Replays** (animated tracks) and match analytics
-- Optional team **voice chat** (WebRTC mesh, signalled over Realtime)
+- Optional team **voice chat** (WebRTC mesh, signalled over Realtime; TURN credentials via `VITE_ICE_SERVERS_JSON`)
+- **Push notifications** (Web Push) for reveals, hunt start, tags, SOS and match end — works with the app in the background
 - **SOS** emergency stop (pauses everyone, freezes timers & zone), consent + traffic-safety briefing
 
 ## Security model
@@ -31,6 +33,13 @@ server-generated, blurred location pings while a shrinking zone forces Shadows t
 2. Apply the migrations: `npx supabase link --project-ref <ref> && npx supabase db push` (or paste `supabase/migrations/*.sql` into the SQL editor, in order). Optionally enable the `pg_cron` extension first for automatic data purging.
 3. `cp .env.example .env` and fill `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
 4. `npm install && npm run dev`
+
+### Push notifications (optional)
+1. `npx web-push generate-vapid-keys` → put the public key in `VITE_VAPID_PUBLIC_KEY`.
+2. Enable the `pg_net` extension. Deploy the function: `npx supabase functions deploy push --no-verify-jwt`.
+3. `npx supabase secrets set PUSH_WEBHOOK_SECRET=<random> VAPID_PUBLIC_KEY=… VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:you@example.com`
+4. In the SQL editor: `insert into private.app_config values ('push_url','https://<ref>.supabase.co/functions/v1/push'), ('push_secret','<same random>') on conflict (key) do update set value = excluded.value;`
+5. Players enable **Match alerts** on their profile (iOS: install to the home screen first). Notifications never contain coordinates.
 
 Deploy `dist/` anywhere static (`npm run build`; SPA fallbacks included for Netlify, Vercel and GitHub Pages — see `.github/workflows/deploy-pages.yml`). Geolocation requires HTTPS.
 

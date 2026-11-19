@@ -6,7 +6,7 @@ import { Compass } from '../../components/Compass';
 import { VoiceChat } from '../../components/VoiceChat';
 import { Button, Modal, errMsg, inputCls, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
-import { bearing, distance, formatClock, formatDistance, nextShrinkAt, zoneRadiusAt } from '../../lib/geo';
+import { bearing, distance, formatClock, formatDistance, inPolygon, nextShrinkAt, zoneCenterAt, zoneRadiusAt } from '../../lib/geo';
 import { TEAM_META, canTag, isPrey, modeInfo } from '../../lib/modes';
 import { describeEvent, toneClass } from '../../lib/events';
 import type { Reveal } from '../../lib/types';
@@ -51,7 +51,9 @@ export default function Game({ room: r, players, positions, reveals, captures, e
   const shrinkAt = nextShrinkAt(room, t);
   const nextRadius = shrinkAt ? zoneRadiusAt({ ...room, status: 'active' }, shrinkAt + 1) : null;
   const nextReveal = (room.last_reveal_at ? Date.parse(room.last_reveal_at) : hsEnd) + room.reveal_interval_s * 1000;
-  const zone = room.zone_lat != null && room.zone_lng != null ? { lat: room.zone_lat, lng: room.zone_lng, radius, next: nextRadius } : null;
+  const c = zoneCenterAt(room, t);
+  const nc = shrinkAt ? zoneCenterAt({ ...room, status: 'active' }, shrinkAt + 1) : null;
+  const zone = c ? { lat: c.lat, lng: c.lng, radius, next: nextRadius, nextLat: nc?.lat, nextLng: nc?.lng } : null;
 
   // ---- latest reveal per player (older ones fade)
   const latestReveals = useMemo(() => {
@@ -84,7 +86,8 @@ export default function Game({ room: r, players, positions, reveals, captures, e
   // ---- compass target: chosen reveal, else nearest enemy reveal, else zone centre
   const targets = latestReveals.map((rv) => ({ id: rv.user_id, lat: rv.lat, lng: rv.lng, d: myPos ? distance(myPos.lat, myPos.lng, rv.lat, rv.lng) : Infinity }));
   targets.sort((a, b) => a.d - b.d);
-  const outside = !!(zone && myPos && distance(myPos.lat, myPos.lng, zone.lat, zone.lng) > radius);
+  const outOfBounds = !!(myPos && !inPolygon(room.boundary, myPos.lat, myPos.lng));
+  const outside = outOfBounds || !!(zone && myPos && distance(myPos.lat, myPos.lng, zone.lat, zone.lng) > radius);
   const tgt = outside || !targets.length ? (zone ? { id: 'zone', lat: zone.lat, lng: zone.lng } : null) : targets.find((x) => x.id === target) ?? targets[0];
   const tgtBearing = tgt && myPos ? bearing(myPos.lat, myPos.lng, tgt.lat, tgt.lng) : null;
   const tgtDist = tgt && myPos ? distance(myPos.lat, myPos.lng, tgt.lat, tgt.lng) : null;
@@ -135,7 +138,7 @@ export default function Game({ room: r, players, positions, reveals, captures, e
 
   return (
     <div className="fixed inset-0 bg-ink overflow-hidden select-none">
-      <GameMap controls={false} zone={zone} safeZones={room.safe_zones} markers={markers} circles={circles} fitKey={room.id}
+      <GameMap controls={false} zone={zone} boundary={room.boundary} safeZones={room.safe_zones} markers={markers} circles={circles} fitKey={room.id}
         follow={follow && myPos && !spectator ? [myPos.lat, myPos.lng] : null} />
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 55%, #05080acc 100%)' }} />
 
@@ -170,7 +173,7 @@ export default function Game({ room: r, players, positions, reveals, captures, e
         <div className="mt-2 flex flex-col items-center gap-1.5">
           {outside && !out && !spectator && (
             <div className="chamfer-sm bg-danger/90 text-white px-4 py-2 font-display text-sm uppercase tracking-wider flash pointer-events-auto">
-              Outside zone{room.rules.zone_elimination && isPrey(room.mode, me?.team ?? null) && outsideSince ? ` · eliminated in ${formatClock(outsideSince + room.zone_grace_s * 1000 - now)}` : ' · return to the circle'}
+              {outOfBounds ? 'Out of bounds' : 'Outside zone'}{room.rules.zone_elimination && isPrey(room.mode, me?.team ?? null) && outsideSince ? ` · eliminated in ${formatClock(outsideSince + room.zone_grace_s * 1000 - now)}` : outOfBounds ? ' · return to the play area' : ' · return to the circle'}
             </div>
           )}
           {loop.feedback?.in_safe_zone && <div className="chamfer-sm bg-cyan/90 text-ink px-3 py-1 font-mono text-xs">IN SAFE ZONE · CANNOT BE TAGGED</div>}

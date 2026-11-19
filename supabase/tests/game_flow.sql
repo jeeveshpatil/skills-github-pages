@@ -206,3 +206,65 @@ reset role;
 select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
 do $$ begin assert (select count(*) from positions where room_id = (select v::uuid from t_ctx where k='room')) = 1, 'new host must not gain referee view'; end $$;
 reset role;
+
+-- moving zone + boundary polygon
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+update t_ctx set v = create_room('{"mode":"battle_royale","head_start_s":0,"duration_s":600,"zone_lat":51.5,"zone_lng":-0.1,"zone_start_m":1000,"zone_end_m":100,"zone_steps":0,"zone_grace_s":0,"rules":{"zone_moves":true,"zone_elimination":true},"boundary":[{"lat":51.495,"lng":-0.105},{"lat":51.495,"lng":-0.095},{"lat":51.505,"lng":-0.095},{"lat":51.505,"lng":-0.105}]}'::jsonb)::text where k = 'room';
+update t_ctx set v = (select code from rooms where id = (select v::uuid from t_ctx where k='room')) where k = 'code';
+reset role;
+do $$ begin assert jsonb_array_length((select boundary from rooms where id = (select v::uuid from t_ctx where k='room'))) = 4, 'boundary saved'; end $$;
+select set_config('request.jwt.claim.sub', :S1, false); set role authenticated;
+select join_room((select v from t_ctx where k='code'));
+reset role;
+select set_config('request.jwt.claim.sub', :S2, false); set role authenticated;
+select join_room((select v from t_ctx where k='code'));
+reset role;
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+select set_team((select v::uuid from t_ctx where k='room'), :H, 'hunter');
+select set_team((select v::uuid from t_ctx where k='room'), :S1, 'shadow');
+select set_team((select v::uuid from t_ctx where k='room'), :S2, 'shadow');
+select start_match((select v::uuid from t_ctx where k='room'));
+reset role;
+do $$ declare r rooms; begin
+  select * into r from rooms where id = (select v::uuid from t_ctx where k='room');
+  assert r.zone_end_lat is not null, 'moving zone picked an end centre';
+  assert geo_dist(r.zone_lat, r.zone_lng, r.zone_end_lat, r.zone_end_lng) <= (r.zone_start_m - r.zone_end_m) + 1, 'final circle inside start circle';
+  assert abs(zone_center_lat(r, r.headstart_ends_at) - r.zone_lat) < 1e-9, 'centre starts at origin';
+  assert abs(zone_center_lat(r, r.ends_at) - r.zone_end_lat) < 1e-9, 'centre ends at end point';
+  assert in_polygon(r.boundary, 51.5, -0.1) and not in_polygon(r.boundary, 51.51, -0.1), 'polygon test';
+end $$;
+-- S1 inside zone but outside boundary? boundary (~555m half-height) is smaller than zone (1km): S1 at 700m north
+select set_config('request.jwt.claim.sub', :S1, false); set role authenticated;
+do $$ declare fb jsonb; begin
+  fb := update_location((select v::uuid from t_ctx where k='room'), 51.5063, -0.1, 5);
+  assert (fb->>'out_of_bounds')::boolean, 'reported out of bounds';
+  assert (fb->>'outside')::boolean, 'out of bounds counts as outside';
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub', :S2, false); set role authenticated;
+select update_location((select v::uuid from t_ctx where k='room'), 51.5, -0.1, 5);
+reset role;
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+select tick((select v::uuid from t_ctx where k='room'));
+reset role;
+update players set out_of_zone_since = now() - interval '5 seconds' where user_id = :S1 and room_id = (select v::uuid from t_ctx where k='room');
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+select tick((select v::uuid from t_ctx where k='room'));
+reset role;
+do $$ begin
+  assert (select status from players where user_id='22222222-2222-2222-2222-222222222222' and room_id=(select v::uuid from t_ctx where k='room')) = 'eliminated', 'out-of-bounds shadow eliminated';
+  assert (select status from players where user_id='33333333-3333-3333-3333-333333333333' and room_id=(select v::uuid from t_ctx where k='room')) = 'alive';
+end $$;
+
+-- push subscriptions: own rows only, https endpoints only, trigger is a no-op without config
+select set_config('request.jwt.claim.sub', :H, false); set role authenticated;
+select save_push_subscription('https://push.example/abc', 'k', 'a');
+do $$ begin perform save_push_subscription('http://evil', 'k', 'a'); raise exception 'should fail';
+exception when others then assert sqlerrm = 'Invalid push endpoint', sqlerrm; end $$;
+do $$ begin assert (select count(*) from push_subscriptions) = 1; end $$;
+reset role;
+select set_config('request.jwt.claim.sub', :S1, false); set role authenticated;
+do $$ begin assert (select count(*) from push_subscriptions) = 0, 'other users cannot see subscriptions'; end $$;
+do $$ begin perform 1 from private.app_config; raise exception 'should fail';
+exception when insufficient_privilege then null; end $$;
+reset role;

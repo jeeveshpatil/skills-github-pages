@@ -8,7 +8,7 @@ import { Button, Panel, Spinner, TeamBadge, errMsg, useToast } from '../componen
 import { Logo } from '../components/Logo';
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabase';
-import { formatClock, formatDistance, zoneRadiusAt } from '../lib/geo';
+import { formatClock, formatDistance, zoneCenterAt, zoneRadiusAt } from '../lib/geo';
 import { TEAM_META, modeInfo } from '../lib/modes';
 import { describeEvent, toneClass } from '../lib/events';
 import type { Anomaly, Reveal } from '../lib/types';
@@ -43,7 +43,8 @@ export default function HostDashboard() {
   const radius = zoneRadiusAt(room, t);
   const hsEnd = Date.parse(room.headstart_ends_at ?? '') || 0;
   const end = Date.parse(room.ends_at ?? '') || 0;
-  const zone = room.zone_lat != null && room.zone_lng != null ? { lat: room.zone_lat, lng: room.zone_lng, radius } : null;
+  const zc = zoneCenterAt(room, t);
+  const zone = zc ? { ...zc, radius } : null;
   const mi = modeInfo(room.mode);
 
   const latest = new Map<string, Reveal>();
@@ -81,7 +82,7 @@ export default function HostDashboard() {
 
       <div className="flex-1 min-h-0 grid lg:grid-cols-[1fr_420px]">
         <div className="relative min-h-[45vh]">
-          <GameMap zone={zone} safeZones={room.safe_zones} markers={markers} circles={circles} fitKey={room.id} center={zone ? [zone.lat, zone.lng] : null} />
+          <GameMap zone={zone} boundary={room.boundary} safeZones={room.safe_zones} markers={markers} circles={circles} fitKey={room.id} center={zone ? [zone.lat, zone.lng] : null} />
           <div className="absolute top-3 left-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               [room.status === 'headstart' ? 'Head start' : 'Time left', live ? formatClock((room.status === 'headstart' ? hsEnd : end) - t) : '—'],

@@ -133,7 +133,7 @@ export default function Lobby({ room: r, players, positions, events, me, uid, lo
 
         <aside className="space-y-4">
           <div className="relative h-64 panel chamfer overflow-hidden">
-            <GameMap center={zone ? [zone.lat, zone.lng] : loop.fix ? [loop.fix.lat, loop.fix.lng] : null} zone={zone} safeZones={room.safe_zones} markers={markers} fitKey={`${room.zone_lat},${room.zone_start_m}`} />
+            <GameMap center={zone ? [zone.lat, zone.lng] : loop.fix ? [loop.fix.lat, loop.fix.lng] : null} zone={zone} boundary={room.boundary} safeZones={room.safe_zones} markers={markers} fitKey={`${room.zone_lat},${room.zone_start_m}`} />
           </div>
           <div className="font-mono text-[11px] flex justify-between">
             <span className={loop.fix ? 'text-neon' : 'text-amber'}>{me?.team === 'spectator' ? 'SPECTATING · GPS OFF' : loop.gpsError ? loop.gpsError : loop.fix ? `GPS LOCK ±${Math.round(loop.fix.accuracy)}m` : 'ACQUIRING GPS…'}</span>
@@ -155,6 +155,8 @@ export default function Lobby({ room: r, players, positions, events, me, uid, lo
               {room.rules.proximity_alerts !== false && <TagPill>Proximity</TagPill>}
               {room.rules.reveal_hunters && <TagPill>Hunters revealed</TagPill>}
               {room.safe_zones.length > 0 && <TagPill>{room.safe_zones.length} safe zones</TagPill>}
+              {room.rules.zone_moves && <TagPill>Moving zone</TagPill>}
+              {room.boundary && <TagPill>Boundary</TagPill>}
             </div>
             {isHost && <Button size="sm" variant="ghost" className="w-full mt-4" onClick={() => setEditing(true)}>Edit settings</Button>}
           </Panel>

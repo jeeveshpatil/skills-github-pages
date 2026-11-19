@@ -33,6 +33,7 @@ create table public.maps (
   center_lng double precision not null check (center_lng between -180 and 180),
   radius_m integer not null check (radius_m between 50 and 20000),
   safe_zones jsonb not null default '[]'::jsonb,
+  boundary jsonb,
   is_public boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -56,6 +57,9 @@ create table public.rooms (
   tag_radius_m integer not null default 15,
   zone_lat double precision,
   zone_lng double precision,
+  zone_end_lat double precision,  -- final zone centre (moving zone), chosen at start
+  zone_end_lng double precision,
+  boundary jsonb,                 -- optional play-area polygon [{lat,lng},...]
   zone_start_m integer not null default 800,
   zone_end_m integer not null default 200,
   zone_steps integer not null default 4,

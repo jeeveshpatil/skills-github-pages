@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bearing, distance, formatClock, formatDistance, nextShrinkAt, zoneRadiusAt } from './geo';
+import { bearing, distance, formatClock, formatDistance, inPolygon, nextShrinkAt, zoneCenterAt, zoneRadiusAt } from './geo';
 import { canTag, isPrey } from './modes';
 import { rankFor } from './ranks';
 
@@ -57,5 +57,22 @@ describe('ranks', () => {
     expect(rankFor(0).name).toBe('Recruit');
     expect(rankFor(850).name).toBe('Tracker');
     expect(rankFor(999999).next).toBeNull();
+  });
+});
+
+describe('moving zone + boundary', () => {
+  const moving = { ...room, zone_lat: 0, zone_lng: 0, zone_end_lat: 0.004, zone_end_lng: -0.002 };
+  it('centre slides with the same stepped progress as the radius', () => {
+    expect(zoneCenterAt(moving, t0 - 1)).toEqual({ lat: 0, lng: 0 });
+    const half = zoneCenterAt(moving, t0 + 2000_000)!;
+    expect(half.lat).toBeCloseTo(0.002); expect(half.lng).toBeCloseTo(-0.001);
+    expect(zoneCenterAt({ ...moving, zone_end_lat: null, zone_end_lng: null }, t0 + 4000_000)).toEqual({ lat: 0, lng: 0 });
+  });
+  it('point in polygon', () => {
+    const sq = [{ lat: 0, lng: 0 }, { lat: 0, lng: 1 }, { lat: 1, lng: 1 }, { lat: 1, lng: 0 }];
+    expect(inPolygon(sq, 0.5, 0.5)).toBe(true);
+    expect(inPolygon(sq, 1.5, 0.5)).toBe(false);
+    expect(inPolygon(null, 9, 9)).toBe(true);
+    expect(inPolygon(sq.slice(0, 2), 9, 9)).toBe(true);
   });
 });
