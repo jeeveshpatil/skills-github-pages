@@ -5,6 +5,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { Button, Spinner, useToast } from '../components/ui';
 import { api } from '../lib/api';
+import { describeEvent } from '../lib/events';
+import { isNative, localNotify } from '../lib/native';
 import Lobby from './room/Lobby';
 import Game from './room/Game';
 import Results from './room/Results';
@@ -29,8 +31,24 @@ export default function RoomPage() {
     }
   }, [me, state.loading, state.room?.status, nav, toast]);
 
-  // follow a host-initiated rematch
   const lastEvent = state.events[state.events.length - 1];
+
+  // native apps: surface key events as local notifications when the app is in the background
+  const notified = useRef(0);
+  useEffect(() => {
+    if (!isNative || !lastEvent || lastEvent.id <= notified.current || !id) return;
+    notified.current = lastEvent.id;
+    if (document.visibilityState === 'visible') return;
+    const important = ['hunt_started', 'reveal', 'emergency_stop', 'resumed', 'capture_confirmed', 'infected', 'match_ended', 'rematch'];
+    const mine = lastEvent.type === 'capture_pending' && lastEvent.target === uid;
+    if (!important.includes(lastEvent.type) && !mine) return;
+    const name = (pid: string | null) => state.players.find((p) => p.user_id === pid)?.display_name ?? 'Someone';
+    const d = describeEvent(lastEvent, name);
+    if (d) void localNotify(mine ? "You've been tagged!" : 'ShadowHunt', mine ? `${name(lastEvent.actor)} tagged you — open to confirm or dispute` : d.text, id);
+  }, [lastEvent?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // follow a host-initiated rematch
+
   useEffect(() => {
     if (lastEvent?.type === 'rematch' && lastEvent.actor !== uid && id) {
       const code = String(lastEvent.payload.code ?? '');

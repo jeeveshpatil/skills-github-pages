@@ -150,7 +150,7 @@ export default function HostDashboard() {
             <p className="text-[11px] text-mute mb-2">Heuristic speed/teleport checks. GPS drift, tunnels and vehicles cause false positives; a careful spoofer can evade them. Use judgement before removing anyone.</p>
             {anoms.length === 0 ? <p className="font-mono text-xs text-neon">No anomalies detected</p> : (
               <ul className="space-y-1 font-mono text-[11px] max-h-40 overflow-auto">
-                {anoms.map((a) => <li key={a.id} className="text-amber">{new Date(a.created_at).toLocaleTimeString()} · {nameOf(a.user_id)} · {a.kind} · {Math.round((a.speed_mps ?? 0) * 3.6)} km/h over {formatDistance(a.distance_m ?? 0)}</li>)}
+                {anoms.map((a) => <li key={a.id} className="text-amber">{new Date(a.created_at).toLocaleTimeString()} · {nameOf(a.user_id)} · {a.kind === 'mock_location' ? 'mock-location app detected (device-reported)' : `${a.kind} · ${Math.round((a.speed_mps ?? 0) * 3.6)} km/h over ${formatDistance(a.distance_m ?? 0)}`}</li>)}
               </ul>
             )}
           </Panel>

@@ -12,6 +12,7 @@ import { describeEvent, toneClass } from '../../lib/events';
 import type { Reveal } from '../../lib/types';
 import { useNow } from '../../hooks/useNow';
 import { useHeading } from '../../hooks/useGeolocation';
+import { openAppSettings, vibrate } from '../../lib/native';
 
 const PROX = {
   danger: { label: 'DANGER CLOSE', sub: '< 50 m', color: '#ff4d6d' },
@@ -108,22 +109,22 @@ export default function Game({ room: r, players, positions, reveals, captures, e
   const prox = loop.feedback?.proximity ?? null;
   const lastProx = useRef<string | null>(null);
   useEffect(() => {
-    if (prox && prox !== lastProx.current && (prox === 'danger' || prox === 'close')) navigator.vibrate?.(prox === 'danger' ? [200, 80, 200, 80, 200] : [150]);
+    if (prox && prox !== lastProx.current && (prox === 'danger' || prox === 'close')) vibrate(prox === 'danger' ? [200, 80, 200, 80, 200] : [150]);
     lastProx.current = prox;
   }, [prox]);
   const lastEvt = events[events.length - 1];
   useEffect(() => {
     if (!lastEvt) return;
-    if (lastEvt.type === 'reveal') navigator.vibrate?.([60, 40, 60]);
-    if (lastEvt.type === 'emergency_stop') navigator.vibrate?.([400, 100, 400]);
-    if ((lastEvt.type === 'capture_confirmed' || lastEvt.type === 'infected') && lastEvt.target === uid) navigator.vibrate?.([600]);
+    if (lastEvt.type === 'reveal') vibrate([60, 40, 60]);
+    if (lastEvt.type === 'emergency_stop') vibrate([400, 100, 400]);
+    if ((lastEvt.type === 'capture_confirmed' || lastEvt.type === 'infected') && lastEvt.target === uid) vibrate([600]);
   }, [lastEvt?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doTag = async (id: string) => {
     setBusy(true);
     try {
       const res = await api.tag(room.id, id);
-      if (res.ok) { toast(room.rules.capture_confirm === false ? 'Capture confirmed!' : 'Tag sent — awaiting confirmation', 'success'); setTagOpen(false); navigator.vibrate?.([80]); }
+      if (res.ok) { toast(room.rules.capture_confirm === false ? 'Capture confirmed!' : 'Tag sent — awaiting confirmation', 'success'); setTagOpen(false); vibrate([80]); }
       else toast(res.reason ?? 'Tag failed', 'warn');
     } catch (e) { toast(errMsg(e), 'error'); } finally { setBusy(false); }
   };
@@ -177,7 +178,7 @@ export default function Game({ room: r, players, positions, reveals, captures, e
             </div>
           )}
           {loop.feedback?.in_safe_zone && <div className="chamfer-sm bg-cyan/90 text-ink px-3 py-1 font-mono text-xs">IN SAFE ZONE · CANNOT BE TAGGED</div>}
-          {loop.gpsError && !spectator && <div className="chamfer-sm bg-amber/90 text-ink px-3 py-1 font-mono text-xs pointer-events-auto">{loop.gpsError}</div>}
+          {loop.gpsError && !spectator && <button onClick={() => void openAppSettings()} className="chamfer-sm bg-amber/90 text-ink px-3 py-1 font-mono text-xs pointer-events-auto">{loop.gpsError}</button>}
           {loop.sendError && !spectator && <div className="chamfer-sm bg-amber/90 text-ink px-3 py-1 font-mono text-xs">Uplink: {loop.sendError}</div>}
           {loop.feedback?.suspect && <div className="chamfer-sm bg-ink/90 border border-amber text-amber px-3 py-1 font-mono text-[10px]">GPS JUMP DETECTED — WAIT FOR A STABLE FIX</div>}
           {out && <div className="chamfer-sm bg-ink/90 border border-line-2 text-soft px-3 py-1 font-mono text-xs">YOU ARE OUT — SPECTATING YOUR TEAM</div>}
@@ -311,7 +312,7 @@ function HoldButton({ onFire }: { onFire: () => void }) {
     timer.current = window.setInterval(() => {
       const v = Math.min(1, (Date.now() - t0) / 900);
       setP(v);
-      if (v >= 1) { stop(); navigator.vibrate?.(200); onFire(); }
+      if (v >= 1) { stop(); vibrate(200); onFire(); }
     }, 30);
   };
   const stop = () => { if (timer.current) clearInterval(timer.current); timer.current = null; setP(0); };

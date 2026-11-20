@@ -268,3 +268,14 @@ do $$ begin assert (select count(*) from push_subscriptions) = 0, 'other users c
 do $$ begin perform 1 from private.app_config; raise exception 'should fail';
 exception when insufficient_privilege then null; end $$;
 reset role;
+
+-- mock-location reports: recorded once per minute, only during a match, members only
+select set_config('request.jwt.claim.sub', :S2, false); set role authenticated;
+select report_mock_location((select v::uuid from t_ctx where k='room'));
+select report_mock_location((select v::uuid from t_ctx where k='room'));
+reset role;
+do $$ begin assert (select count(*) from anomalies where kind = 'mock_location') = 1, 'mock location deduped per minute'; end $$;
+select set_config('request.jwt.claim.sub', :X, false); set role authenticated;
+do $$ begin perform report_mock_location((select v::uuid from t_ctx where k='room')); raise exception 'should fail';
+exception when others then assert sqlerrm = 'Not in this room', sqlerrm; end $$;
+reset role;
