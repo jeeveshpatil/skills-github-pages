@@ -1,8 +1,11 @@
-# Manual deploy of the PWA to GitHub Pages. Set repo secrets VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY,
-# and Settings -> Pages -> Source: GitHub Actions.
+# Deploys the PWA to GitHub Pages (Settings -> Pages -> Source: GitHub Actions).
+# Supabase URL + publishable key come from .env.production; repo secrets of the same name override them.
 name: Deploy PWA to Pages
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/**', 'public/**', 'index.html', 'package*.json', 'vite.config.ts', '.env.production', '.github/workflows/deploy-pages.yml']
 permissions:
   contents: read
   pages: write
@@ -17,11 +20,16 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: npm run build
+      - name: Build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SECRET_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SECRET_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          # only override .env.production when the secrets are actually set (empty env vars would win otherwise)
+          [ -n "$SECRET_URL" ] && export VITE_SUPABASE_URL="$SECRET_URL"
+          [ -n "$SECRET_KEY" ] && export VITE_SUPABASE_ANON_KEY="$SECRET_KEY"
+          npm run build
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
       - id: deployment
