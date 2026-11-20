@@ -60,4 +60,5 @@ export const api = {
   rematch: (room: string) => rpc<string>('rematch', { p_room: room }),
   joinRematch: (oldRoom: string, code: string) => rpc<string>('join_rematch', { p_old_room: oldRoom, p_code: code }),
   deleteMyLocationData: () => rpc('delete_my_location_data'),
+  deleteMyAccount: () => rpc('delete_my_account'),
 };

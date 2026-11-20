@@ -47,7 +47,7 @@ export default function Lobby({ room: r, players, positions, events, me, uid, lo
   if (loop.fix && !positions[uid]) markers.push({ id: uid, lat: loop.fix.lat, lng: loop.fix.lng, kind: 'me', color: '#22e3ff' });
 
   const zone = room.zone_lat != null && room.zone_lng != null ? { lat: room.zone_lat, lng: room.zone_lng, radius: room.zone_start_m, next: room.zone_end_m } : null;
-  const startBlock = fighters.length < 2 ? 'Need at least 2 players' : !zone && !positions[room.host_id] ? 'Set a zone centre or share host GPS' : null;
+  const startBlock = fighters.length < 2 ? 'Need 2+ players' : !zone && !positions[room.host_id] ? 'Set zone first' : null;
 
   if (editing) {
     return (
@@ -173,7 +173,7 @@ export default function Lobby({ room: r, players, positions, events, me, uid, lo
               <Button variant="ghost" onClick={() => run('shuffle', () => api.shuffleTeams(room.id))} loading={busy === 'shuffle'}>Shuffle</Button>
               <Link to={`/room/${room.id}/host`} className="hidden md:block"><Button variant="ghost">Dashboard</Button></Link>
               <Button className="flex-1" disabled={!!startBlock} title={startBlock ?? ''} loading={busy === 'start'} onClick={() => run('start', () => api.start(room.id))}>
-                {startBlock ?? `Start · ${players.filter((p) => p.ready).length}/${fighters.length} ready`}
+                <span className="whitespace-nowrap">{startBlock ?? `Start · ${players.filter((p) => p.ready).length}/${fighters.length}`}</span>
               </Button>
             </>
           )}

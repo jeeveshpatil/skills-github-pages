@@ -15,7 +15,7 @@ export function GetApp({ className = '' }: { className?: string }) {
       </div>
     );
   }
-  if (!APK) return null;
+  if (!APK || !/Android/i.test(ua)) return null;
   return (
     <a href={APK} className={`flex items-center gap-3 chamfer-sm border border-neon/50 bg-neon/10 px-4 py-3 hover:bg-neon/20 transition-colors ${className}`}>
       <svg viewBox="0 0 24 24" className="size-7 text-neon shrink-0" fill="currentColor" aria-hidden><path d="M17.6 9.48l1.84-3.18a.38.38 0 00-.66-.38l-1.87 3.23a11.4 11.4 0 00-9.82 0L5.22 5.92a.38.38 0 00-.66.38l1.84 3.18A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" /></svg>

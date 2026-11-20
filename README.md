@@ -56,6 +56,8 @@ on your phone and allow "install unknown apps". For a signed release / Play Stor
 (create a keystore with `keytool -genkeypair -v -keystore release.jks -alias shadowhunt -keyalg RSA -keysize 2048 -validity 10000`,
 then `base64 -w0 release.jks`).
 
+**Google Play:** see [`store/PLAY_STORE.md`](store/PLAY_STORE.md) — listing text, data-safety answers, graphics and release steps.
+
 **iOS:** CI compiles the project for the simulator. To run on an iPhone you need a Mac with Xcode: `npm ci && npm run ios`,
 pick your Apple ID team under *Signing & Capabilities*, and run. TestFlight/App Store needs an Apple Developer account.
 

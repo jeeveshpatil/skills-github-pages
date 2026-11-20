@@ -54,12 +54,20 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GH_TOKEN: ${{ github.token }}
         working-directory: android
         run: |
           if [ -z "$KEYSTORE_B64" ]; then echo "No signing secrets; skipping release build"; exit 0; fi
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
           export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
           ./gradlew --no-daemon assembleRelease bundleRelease
+          rm -f "$RUNNER_TEMP/release.jks"
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            # signed APK replaces the debug one on the public download link; the .aab is what you upload to Google Play
+            cp app/build/outputs/apk/release/app-release.apk ../ShadowHuntPro.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../ShadowHuntPro-playstore.aab
+            gh release upload android-latest ../ShadowHuntPro.apk ../ShadowHuntPro-playstore.aab --clobber
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: shadowhunt-pro-release

@@ -57,7 +57,7 @@ export default function AuthPage() {
             </>
           )}
           <GetApp />
-          <p className="text-[11px] text-mute">Play outdoors, in public spaces, with people you know. Stay aware of traffic.</p>
+          <p className="text-[11px] text-mute">Play outdoors, in public spaces, with people you know. Stay aware of traffic. <a className="underline text-soft" href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noreferrer">Privacy policy</a></p>
         </div>
       </div>
     </div>

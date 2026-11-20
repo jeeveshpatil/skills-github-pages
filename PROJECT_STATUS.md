@@ -9,6 +9,7 @@
 - Web Push: `push_subscriptions` + `events` trigger → pg_net → `supabase/functions/push` (verified locally end to end); PNG icons; TURN via `VITE_ICE_SERVERS_JSON`
 
 - Native apps via Capacitor 8: background geolocation, native HTTP for location, haptics, keep-awake, local notifications, mock-location reporting (`report_mock_location`), auth deep link; CI builds Android APK (+ signed AAB with secrets) and compiles iOS for simulator
+- Play Store readiness: in-app account deletion (`delete_my_account`), privacy policy page, store graphics + listing (`store/`), signed AAB pipeline, daily Supabase keep-alive (`ping()` + `keepalive.yml`)
 
 ## Key decisions
 - Reference site (shadowhunt.fun) was unreachable from the build sandbox; features derived from the brief and the genre. No code/assets copied.
