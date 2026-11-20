@@ -44,3 +44,6 @@ dev-dist/
 coverage/
 *.tsbuildinfo
 supabase/functions/**/.ca-local.pem
+
+# Gradle wrapper must be committed for Android builds
+!android/gradle/wrapper/gradle-wrapper.jar
