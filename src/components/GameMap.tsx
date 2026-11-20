@@ -58,7 +58,8 @@ export function GameMap({ center, zone, boundary, safeZones = [], markers = [], 
         sources: { osm: { type: 'raster', tiles: [TILE], tileSize: 256, maxzoom: 19, attribution: '© OpenStreetMap contributors' } },
         layers: [
           { id: 'bg', type: 'background', paint: { 'background-color': '#05080a' } },
-          { id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-saturation': -0.85, 'raster-brightness-max': 0.42, 'raster-contrast': 0.25, 'raster-hue-rotate': 160 } },
+          { id: 'osm', type: 'raster', source: 'osm', // min > max inverts the tiles (light OSM -> dark); hue-rotate restores colour families after inversion
+          paint: { 'raster-brightness-min': 0.62, 'raster-brightness-max': 0.04, 'raster-saturation': -0.7, 'raster-contrast': 0.1, 'raster-hue-rotate': 180 } },
         ],
       },
       center: center ? [center[1], center[0]] : [0, 20],

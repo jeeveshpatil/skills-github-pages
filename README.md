@@ -50,11 +50,13 @@ location uploads over the native HTTP stack (immune to Android's WebView backgro
 keep-awake, local notifications for reveals/tags/SOS while backgrounded, mock-location detection on Android
 (device-reported hint → host anomaly list), and email sign-in deep links (`io.github.jeeveshpatil.shadowhunt://auth-callback`).
 
-**Get the Android app:** GitHub → Actions → *Mobile apps* → latest run → download `shadowhunt-pro-debug-apk`, copy the APK
-to your phone and open it (allow "install unknown apps"). For a signed release / Play Store AAB add repo secrets
+**Get the Android app:** download https://github.com/jeeveshpatil/skills-github-pages/releases/download/android-latest/ShadowHuntPro.apk (or tap "Get the Android app" on the website); every build of `main` refreshes it. Open the APK
+on your phone and allow "install unknown apps". For a signed release / Play Store AAB add repo secrets
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
 (create a keystore with `keytool -genkeypair -v -keystore release.jks -alias shadowhunt -keyalg RSA -keysize 2048 -validity 10000`,
 then `base64 -w0 release.jks`).
+
+**Google Play:** see [`store/PLAY_STORE.md`](store/PLAY_STORE.md) — listing text, data-safety answers, graphics and release steps.
 
 **iOS:** CI compiles the project for the simulator. To run on an iPhone you need a Mac with Xcode: `npm ci && npm run ios`,
 pick your Apple ID team under *Signing & Capabilities*, and run. TestFlight/App Store needs an Apple Developer account.

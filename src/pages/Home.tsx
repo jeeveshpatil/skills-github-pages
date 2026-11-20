@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
+import { GetApp } from '../components/GetApp';
 import { Button, Panel, inputCls } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { MODES, winnerLabel } from '../lib/modes';
@@ -60,6 +61,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <GetApp className="mt-4" />
 
       <h2 className="label mt-8 mb-3">Game modes</h2>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">

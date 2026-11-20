@@ -110,9 +110,21 @@ export default function Profile() {
             {pushSupported() ? (
               <div className="mt-3 border-t border-line pt-2"><Toggle label="Match alerts (push)" desc="Reveals, hunt start, tags, SOS — even when the app is in the background" checked={!!push} onChange={togglePush} /></div>
             ) : <p className="text-xs text-mute mt-3">Push alerts unavailable here (not configured, or on iOS install the app to the home screen first).</p>}
+            <a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noreferrer" className="block font-mono text-xs text-cyan mt-3 underline">Privacy policy</a>
             <Button variant="ghost" className="mt-3" onClick={() => api.deleteMyLocationData().then(() => toast('Location history deleted', 'success')).catch((e) => toast(errMsg(e), 'error'))}>Delete my location history now</Button>
           </Panel>
         </div>
+      )}
+      {own && (
+        <Panel title={<span className="text-danger">Danger zone</span>} className="mt-4">
+          <p className="text-sm">Permanently delete your account: profile, XP, achievements, match history, maps and all location data. Rooms you host are handed to another player. This cannot be undone.</p>
+          <Button variant="danger" className="mt-3" onClick={async () => {
+            if (!confirm('Delete your ShadowHunt account and all its data permanently?')) return;
+            if (prompt('Type DELETE to confirm') !== 'DELETE') return;
+            try { await disablePush().catch(() => {}); await api.deleteMyAccount(); await signOut(); toast('Account deleted', 'success'); }
+            catch (e) { toast(errMsg(e), 'error'); }
+          }}>Delete my account</Button>
+        </Panel>
       )}
     </Shell>
   );

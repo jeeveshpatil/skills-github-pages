@@ -279,3 +279,27 @@ select set_config('request.jwt.claim.sub', :X, false); set role authenticated;
 do $$ begin perform report_mock_location((select v::uuid from t_ctx where k='room')); raise exception 'should fail';
 exception when others then assert sqlerrm = 'Not in this room', sqlerrm; end $$;
 reset role;
+
+-- account deletion: hosted rooms move to another player, own data is removed
+\set D '''66666666-6666-6666-6666-666666666666'''
+insert into auth.users (id) values (:D);
+select set_config('request.jwt.claim.sub', :D, false); set role authenticated;
+insert into t_ctx select 'droom', create_room('{"name":"Doomed host"}'::jsonb)::text;
+insert into t_ctx select 'solo', create_room('{"name":"Solo"}'::jsonb)::text;
+reset role;
+insert into t_ctx select 'dcode', code from rooms where id = (select v::uuid from t_ctx where k='droom');
+select set_config('request.jwt.claim.sub', :S1, false); set role authenticated;
+select join_room((select v from t_ctx where k='dcode'));
+reset role;
+select set_config('request.jwt.claim.sub', :D, false); set role authenticated;
+select delete_my_account();
+reset role;
+do $$ begin
+  assert not exists (select 1 from auth.users where id = '66666666-6666-6666-6666-666666666666'), 'auth user deleted';
+  assert not exists (select 1 from profiles where id = '66666666-6666-6666-6666-666666666666'), 'profile cascaded';
+  assert (select host_id from rooms where id = (select v::uuid from t_ctx where k='droom')) = '22222222-2222-2222-2222-222222222222', 'host handed over';
+  assert not exists (select 1 from rooms where id = (select v::uuid from t_ctx where k='solo')), 'empty hosted room removed';
+end $$;
+set role anon;
+select ping();
+reset role;
