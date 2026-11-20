@@ -43,6 +43,26 @@ server-generated, blurred location pings while a shrinking zone forces Shadows t
 
 Deploy `dist/` anywhere static (`npm run build`; SPA fallbacks included for Netlify, Vercel and GitHub Pages — see `.github/workflows/deploy-pages.yml`). Geolocation requires HTTPS.
 
+## Mobile apps (Android & iOS)
+The same codebase ships as native apps via **Capacitor** (`android/`, `ios/`, `capacitor.config.ts`). Native-only extras (`src/lib/native.ts`):
+background GPS that keeps working with the screen off (Android foreground service / iOS location background mode),
+location uploads over the native HTTP stack (immune to Android's WebView background throttling), real haptics on iOS,
+keep-awake, local notifications for reveals/tags/SOS while backgrounded, mock-location detection on Android
+(device-reported hint → host anomaly list), and email sign-in deep links (`io.github.jeeveshpatil.shadowhunt://auth-callback`).
+
+**Get the Android app:** GitHub → Actions → *Mobile apps* → latest run → download `shadowhunt-pro-debug-apk`, copy the APK
+to your phone and open it (allow "install unknown apps"). For a signed release / Play Store AAB add repo secrets
+`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+(create a keystore with `keytool -genkeypair -v -keystore release.jks -alias shadowhunt -keyalg RSA -keysize 2048 -validity 10000`,
+then `base64 -w0 release.jks`).
+
+**iOS:** CI compiles the project for the simulator. To run on an iPhone you need a Mac with Xcode: `npm ci && npm run ios`,
+pick your Apple ID team under *Signing & Capabilities*, and run. TestFlight/App Store needs an Apple Developer account.
+
+**Local dev:** `npm run android` / `npm run ios` (builds web, syncs, opens Android Studio / Xcode). Regenerate icons with `npm run assets:generate`.
+
+Supabase: add `io.github.jeeveshpatil.shadowhunt://auth-callback` under *Authentication → URL Configuration → Redirect URLs* for email sign-in in the apps.
+
 ## Testing
 | Command | What |
 |---|---|

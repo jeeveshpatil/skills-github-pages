@@ -2,12 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
+import { Capacitor } from '@capacitor/core';
 import App from './App';
 import { AuthProvider } from './hooks/useAuth';
 import { ToastProvider } from './components/ui';
 import './index.css';
 
-registerSW({ immediate: true });
+// the native apps bundle their assets; a service worker would only add a stale cache there
+if (!Capacitor.isNativePlatform()) registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

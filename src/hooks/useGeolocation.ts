@@ -1,13 +1,25 @@
 import { useEffect, useState } from 'react';
+import { isNative, setKeepAwake, watchNativeLocation } from '../lib/native';
 
-export interface Fix { lat: number; lng: number; accuracy: number; heading: number | null; speed: number | null; at: number }
+export interface Fix { lat: number; lng: number; accuracy: number; heading: number | null; speed: number | null; at: number; simulated?: boolean }
 
-/** Continuous high-accuracy GPS watch. Only active while `enabled`. */
+/**
+ * Continuous high-accuracy GPS watch. Only active while `enabled`.
+ * In the native apps this uses a background-capable watcher so tracking survives screen-off.
+ */
 export function useGeolocation(enabled: boolean) {
   const [fix, setFix] = useState<Fix | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !isNative) return;
+    let stop: (() => void) | null = null, cancelled = false;
+    watchNativeLocation((f) => { setError(null); setFix(f); }, setError)
+      .then((s) => { if (cancelled) s(); else stop = s; })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    return () => { cancelled = true; stop?.(); };
+  }, [enabled]);
+  useEffect(() => {
+    if (!enabled || isNative) return;
     if (!('geolocation' in navigator)) { setError('Geolocation is not supported on this device'); return; }
     const id = navigator.geolocation.watchPosition(
       (p) => {
@@ -52,7 +64,12 @@ export function useHeading() {
 /** Keeps the screen awake during a match (Screen Wake Lock API, where supported). */
 export function useWakeLock(enabled: boolean) {
   useEffect(() => {
-    if (!enabled || !('wakeLock' in navigator)) return;
+    if (!enabled || !isNative) return;
+    void setKeepAwake(true);
+    return () => { void setKeepAwake(false); };
+  }, [enabled]);
+  useEffect(() => {
+    if (!enabled || isNative || !('wakeLock' in navigator)) return;
     let lock: WakeLockSentinel | null = null;
     const acquire = async () => { try { lock = await navigator.wakeLock.request('screen'); } catch { /* ignore */ } };
     void acquire();

@@ -4,6 +4,8 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const isConfigured = Boolean(url && key);
+export const supabaseUrl = url || 'http://localhost:54321';
+export const supabaseKey = key || 'public-anon-key';
 
 // When unconfigured we still create a client against a dummy URL so imports don't crash;
 // the UI shows a setup screen instead of making calls.

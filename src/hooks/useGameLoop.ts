@@ -22,6 +22,15 @@ export function useGameLoop(room: Room | null, me: Player | undefined) {
   const roomId = room?.id;
   const interval = Math.max(2, room?.location_interval_s ?? 5) * 1000;
 
+  // Android reports locations produced by mock-location apps. Client-reported, so it is only a hint.
+  const lastMock = useRef(0);
+  useEffect(() => {
+    if (fix?.simulated && roomId && sharing && Date.now() - lastMock.current > 60000) {
+      lastMock.current = Date.now();
+      api.reportMockLocation(roomId).catch(() => {});
+    }
+  }, [fix, roomId, sharing]);
+
   useEffect(() => {
     if (!sharing || !roomId) return;
     let stop = false;

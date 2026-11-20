@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ShadowHunt Pro</string>
+    <string name="title_activity_main">ShadowHunt Pro</string>
+    <string name="package_name">io.github.jeeveshpatil.shadowhunt</string>
+    <string name="custom_url_scheme">io.github.jeeveshpatil.shadowhunt</string>
+    <!-- background-geolocation foreground-service notification -->
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_stat_shadowhunt</string>
+    <string name="capacitor_background_geolocation_notification_color">#2dffa0</string>
+</resources>

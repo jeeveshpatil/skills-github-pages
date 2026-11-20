@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { Button, Field, inputCls, errMsg, useToast } from '../components/ui';
 import { MODES } from '../lib/modes';
+import { NATIVE_AUTH_REDIRECT, isNative } from '../lib/native';
 
 export default function AuthPage() {
   const toast = useToast();
@@ -20,7 +21,7 @@ export default function AuthPage() {
   const magic = async () => {
     if (!email.includes('@')) return toast('Enter a valid email', 'warn');
     setBusy('email');
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + import.meta.env.BASE_URL, data: { username: name.trim() || undefined } } });
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: isNative ? NATIVE_AUTH_REDIRECT : window.location.origin + import.meta.env.BASE_URL, data: { username: name.trim() || undefined } } });
     setBusy(null);
     if (error) toast(errMsg(error.message), 'error'); else setSent(true);
   };
