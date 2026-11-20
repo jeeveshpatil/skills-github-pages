@@ -14,6 +14,8 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # publishes the APK as a GitHub Release (stable public download link)
     env:
       VERSION_CODE: ${{ github.run_number }}
       VERSION_NAME: 1.0.${{ github.run_number }}
@@ -34,6 +36,18 @@ jobs:
           name: shadowhunt-pro-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Publish APK as the "android-latest" release
+        # main builds and manual runs get a direct, login-free link:
+        # https://github.com/<owner>/<repo>/releases/download/android-latest/ShadowHuntPro.apk
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ShadowHuntPro.apk
+          gh release delete android-latest --cleanup-tag --yes 2>/dev/null || true
+          gh release create android-latest ShadowHuntPro.apk --target "$GITHUB_SHA" --prerelease \
+            --title "ShadowHunt Pro for Android (build ${VERSION_NAME})" \
+            --notes "Latest Android build from \`${GITHUB_REF_NAME}\` (${GITHUB_SHA::7}). Download **ShadowHuntPro.apk** below, open it on your phone and allow installing from this source. Debug-signed test build — not from the Play Store."
       - name: Signed release (only when signing secrets are configured)
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
+import { GetApp } from '../components/GetApp';
 import { Button, Field, inputCls, errMsg, useToast } from '../components/ui';
 import { MODES } from '../lib/modes';
 import { NATIVE_AUTH_REDIRECT, isNative } from '../lib/native';
@@ -55,6 +56,7 @@ export default function AuthPage() {
               <Button className="w-full" variant="ghost" onClick={magic} loading={busy === 'email'}>Send magic link</Button>
             </>
           )}
+          <GetApp />
           <p className="text-[11px] text-mute">Play outdoors, in public spaces, with people you know. Stay aware of traffic.</p>
         </div>
       </div>
